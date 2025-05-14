@@ -253,3 +253,79 @@
     (ok true)
   )
 )
+
+(define-public (redeem-stablecoin
+    (vault-owner principal)
+    (vault-id uint)
+    (redeem-amount uint)
+  )
+  (let (
+      (is-valid-vault-id (and
+        (> vault-id u0)
+        (<= vault-id (var-get vault-counter))
+      ))
+      (vault (unwrap!
+        (map-get? vaults {
+          owner: vault-owner,
+          id: vault-id,
+        })
+        ERR-INVALID-PARAMETERS
+      ))
+    )
+    (asserts! is-valid-vault-id ERR-INVALID-PARAMETERS)
+    (asserts! (is-eq tx-sender vault-owner) ERR-UNAUTHORIZED-VAULT-ACTION)
+    (asserts! (> redeem-amount u0) ERR-INVALID-PARAMETERS)
+    (asserts! (<= redeem-amount (get stablecoin-minted vault))
+      ERR-INSUFFICIENT-BALANCE
+    )
+    (map-set vaults {
+      owner: vault-owner,
+      id: vault-id,
+    } {
+      collateral-amount: (get collateral-amount vault),
+      stablecoin-minted: (- (get stablecoin-minted vault) redeem-amount),
+      created-at: (get created-at vault),
+    })
+    (var-set total-supply (- (var-get total-supply) redeem-amount))
+    (ok true)
+  )
+)
+
+;; GOVERNANCE FUNCTIONS
+
+(define-public (update-collateralization-ratio (new-ratio uint))
+  (begin
+    (asserts! (is-eq tx-sender CONTRACT-OWNER) ERR-NOT-AUTHORIZED)
+    (asserts! (and
+      (>= new-ratio u100)
+      (<= new-ratio u300)
+    )
+      ERR-INVALID-PARAMETERS
+    )
+    (var-set collateralization-ratio new-ratio)
+    (ok true)
+  )
+)
+
+;; READ-ONLY FUNCTIONS
+
+(define-read-only (get-latest-btc-price)
+  (map-get? last-btc-price {
+    timestamp: stacks-block-height,
+    price: u0,
+  })
+)
+
+(define-read-only (get-vault-details
+    (vault-owner principal)
+    (vault-id uint)
+  )
+  (map-get? vaults {
+    owner: vault-owner,
+    id: vault-id,
+  })
+)
+
+(define-read-only (get-total-supply)
+  (var-get total-supply)
+)
