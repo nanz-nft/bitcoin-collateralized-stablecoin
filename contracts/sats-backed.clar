@@ -89,3 +89,83 @@
   }
   uint
 )
+
+;; VAULT SYSTEM
+
+(define-map vaults
+  {
+    owner: principal,
+    id: uint,
+  }
+  {
+    collateral-amount: uint,
+    stablecoin-minted: uint,
+    created-at: uint,
+  }
+)
+
+(define-data-var vault-counter uint u0)
+
+;; ORACLE MANAGEMENT FUNCTIONS
+
+(define-public (add-btc-price-oracle (oracle principal))
+  (begin
+    (asserts! (is-eq tx-sender CONTRACT-OWNER) ERR-NOT-AUTHORIZED)
+    (asserts!
+      (and
+        (not (is-eq oracle CONTRACT-OWNER))
+        (not (is-eq oracle tx-sender))
+      )
+      ERR-INVALID-PARAMETERS
+    )
+    (map-set btc-price-oracles oracle true)
+    (ok true)
+  )
+)
+
+(define-public (update-btc-price
+    (price uint)
+    (timestamp uint)
+  )
+  (begin
+    (asserts! (is-some (map-get? btc-price-oracles tx-sender)) ERR-NOT-AUTHORIZED)
+    (asserts! (and
+      (> price u0)
+      (<= price MAX-BTC-PRICE)
+    )
+      ERR-INVALID-PARAMETERS
+    )
+    (asserts! (<= timestamp MAX-TIMESTAMP) ERR-INVALID-PARAMETERS)
+    (map-set last-btc-price {
+      timestamp: timestamp,
+      price: price,
+    }
+      price
+    )
+    (ok true)
+  )
+)
+
+;; VAULT MANAGEMENT FUNCTIONS
+
+(define-public (create-vault (collateral-amount uint))
+  (let (
+      (vault-id (+ (var-get vault-counter) u1))
+      (new-vault {
+        owner: tx-sender,
+        id: vault-id,
+      })
+    )
+    (asserts! (> collateral-amount u0) ERR-INVALID-COLLATERAL)
+    (asserts! (< vault-id (+ (var-get vault-counter) u1000))
+      ERR-INVALID-PARAMETERS
+    )
+    (var-set vault-counter vault-id)
+    (map-set vaults new-vault {
+      collateral-amount: collateral-amount,
+      stablecoin-minted: u0,
+      created-at: stacks-block-height,
+    })
+    (ok vault-id)
+  )
+)
